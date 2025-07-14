@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>블록깨기 게임</title>
+    <link href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a202c; /* Dark background */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden; /* Prevent scrolling */
+        }
+        canvas {
+            background-color: #2d3748; /* Slightly lighter dark background for canvas */
+            display: block;
+            border-radius: 1rem; /* Rounded corners */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            touch-action: none; /* Prevent default touch actions like scrolling */
+        }
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 1rem;
+            background-color: #2d3748;
+            border-radius: 1.5rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            max-width: 90vw; /* Responsive width */
+            width: 600px; /* Max width for larger screens */
+        }
+        .game-info {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            margin-bottom: 1rem;
+            color: #e2e8f0; /* Light text color */
+            font-size: 1.125rem; /* lg */
+            font-weight: bold;
+        }
+        .game-controls {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        .game-button {
+            background-image: linear-gradient(to right, #63b3ed, #4299e1); /* Blue gradient */
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.75rem;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .game-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 10px -1px rgba(0, 0, 0, 0.15), 0 4px 6px -2px rgba(0, 0, 0, 0.08);
+        }
+        .game-button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        /* Custom Modal for messages */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+        }
+        .modal-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal-content {
+            background-color: #2d3748;
+            color: #e2e8f0;
+            padding: 2rem;
+            border-radius: 1rem;
+            text-align: center;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+            transform: translateY(-20px);
+            transition: transform 0.3s ease-in-out;
+        }
+        .modal-overlay.show .modal-content {
+            transform: translateY(0);
+        }
+        .modal-message {
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            font-weight: bold;
+        }
+        .modal-button {
+            background-color: #4299e1;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            transition: background-color 0.2s;
+        }
+        .modal-button:hover {
+            background-color: #3182ce;
+        }
+        /* Timer display */
+        #timer {
+            color: #e2e8f0;
+            font-size: 1.125rem;
+            font-weight: bold;
+            margin-left: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="game-info">
+            <div>점수: <span id="score">0</span></div>
+            <div>생명: <span id="lives">3</span></div>
+            <div id="timer-container" style="display:none;">남은 시간: <span id="timer">20</span>초</div>
+        </div>
+        <canvas id="breakoutCanvas"></canvas>
+        <div class="game-controls">
+            <button id="startButton" class="game-button">게임 시작</button>
+            <button id="resetButton" class="game-button" style="display:none;">다시 시작</button>
+        </div>
+    </div>
+
+    <!-- Custom Modal Structure -->
+    <div id="messageModal" class="modal-overlay">
+        <div class="modal-content">
+            <div id="modalMessage" class="modal-message"></div>
+            <button id="modalButton" class="modal-button">확인</button>
+        </div>
+    </div>
+
+    <!-- Include Tone.js library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+
+    <script>
+        const canvas = document.getElementById("breakoutCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // Set initial canvas size, will be adjusted by resize handler
+        canvas.width = 480;
+        canvas.height = 320;
+
+        // Game state variables
+        let gameStarted = false;
+        let gameOver = false;
+        let gameWon = false;
+        let animationFrameId;
+
+        // Ball properties
+        let ballRadius = 10;
+        let x = canvas.width / 2;
+        let y = canvas.height - 30;
+        let dx = 2; // Ball speed in x direction
+        let dy = -2; // Ball speed in y direction
+
+        // Paddle properties
+        let paddleHeight = 10;
+        let paddleWidth = 75;
+        let paddleX = (canvas.width - paddleWidth) / 2;
+        let rightPressed = false; // For keyboard control (still present but mouse takes precedence)
+        let leftPressed = false;  // For keyboard control (still present but mouse takes precedence)
+
+        // Brick properties
+        let brickRowCount = 5;
+        let brickColumnCount = 8; // More columns for a better challenge
+        let brickWidth = 50;
+        let brickHeight = 15;
+        let brickPadding = 10;
+        let brickOffsetTop = 30;
+        let brickOffsetLeft = 30;
+        let bricks = [];
+
+        // Define an array of colors for the bricks, one for each row
+        const brickColors = [
+            "#ef4444", // Red
+            "#f97316", // Orange
+            "#fbbf24", // Amber
+            "#22c55e", // Green
+            "#3b82f6"  // Blue
+        ];
+
+        // Game score and lives
+        let score = 0;
+        let lives = 3;
+
+        // Last block timer variables
+        let lastBlockTimerId = null;
+        let lastBlockTimeRemaining = 20; // 20 seconds
+        let lastBlockTimerIntervalId = null;
+
+        // DOM elements
+        const scoreDisplay = document.getElementById("score");
+        const livesDisplay = document.getElementById("lives");
+        const startButton = document.getElementById("startButton");
+        const resetButton = document.getElementById("resetButton");
+        const messageModal = document.getElementById("messageModal");
+        const modalMessage = document.getElementById("modalMessage");
+        const modalButton = document.getElementById("modalButton");
+        const timerDisplay = document.getElementById("timer");
+        const timerContainer = document.getElementById("timer-container");
+
+        // Tone.js setup for background music
+        let backgroundSynth;
+        let backgroundLoop;
+
+        // Initialize Tone.js and create a simple background loop
+        function initAudio() {
+            // Create a simple synth
+            backgroundSynth = new Tone.Synth().toDestination();
+
+            // Create a loop that plays a note
+            backgroundLoop = new Tone.Loop(time => {
+                // Play a simple C4 note for 0.5 seconds
+                backgroundSynth.triggerAttackRelease("C4", "8n", time);
+            }, "4n"); // Repeat every quarter note
+            // Set the volume lower to not be too intrusive
+            backgroundSynth.volume.value = -15;
+        }
+
+        // Start background music
+        async function startBackgroundMusic() {
+            if (Tone.context.state !== 'running') {
+                await Tone.start(); // Resume audio context if suspended
+            }
+            backgroundLoop.start(0); // Start the loop from the beginning
+            Tone.Transport.start(); // Start the Tone.js transport
+        }
+
+        // Stop background music
+        function stopBackgroundMusic() {
+            backgroundLoop.stop();
+            Tone.Transport.stop();
+        }
+
+        // Initialize bricks
+        function initBricks() {
+            bricks = [];
+            for (let c = 0; c < brickColumnCount; c++) {
+                bricks[c] = [];
+                for (let r = 0; r < brickRowCount; r++) {
+                    bricks[c][r] = { x: 0, y: 0, status: 1 }; // status 1 means active
+                }
+            }
+
+            // Introduce one gap per row randomly
+            for (let r = 0; r < brickRowCount; r++) {
+                // Generate a random column index for the gap in the current row
+                const gapColumn = Math.floor(Math.random() * brickColumnCount);
+                bricks[gapColumn][r].status = 0; // Set this brick as inactive (gap)
+            }
+        }
+
+        // Draw ball
+        function drawBall() {
+            ctx.beginPath();
+            ctx.arc(x, y, ballRadius, 0, Math.PI * 2);
+            ctx.fillStyle = "#f6e05e"; // Yellow ball
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        // Draw paddle
+        function drawPaddle() {
+            ctx.beginPath();
+            ctx.rect(paddleX, canvas.height - paddleHeight, paddleWidth, paddleHeight);
+            ctx.fillStyle = "#4299e1"; // Blue paddle
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        // Draw bricks
+        function drawBricks() {
+            for (let c = 0; c < brickColumnCount; c++) {
+                for (let r = 0; r < brickRowCount; r++) {
+                    if (bricks[c][r].status === 1) {
+                        let brickX = c * (brickWidth + brickPadding) + brickOffsetLeft;
+                        let brickY = r * (brickHeight + brickPadding) + brickOffsetTop;
+                        bricks[c][r].x = brickX;
+                        bricks[c][r].y = brickY;
+                        ctx.beginPath();
+                        // Assign color based on the row index
+                        ctx.fillStyle = brickColors[r % brickColors.length];
+                        ctx.rect(brickX, brickY, brickWidth, brickHeight);
+                        ctx.fill();
+                        ctx.closePath();
+                    }
+                }
+            }
+        }
+
+        // Function to get active brick count
+        function getActiveBricksCount() {
+            let count = 0;
+            for (let col = 0; col < brickColumnCount; col++) {
+                for (let row = 0; row < brickRowCount; row++) {
+                    if (bricks[col][row].status === 1) {
+                        count++;
+                    }
+                }
+            }
+            return count;
+        }
+
+        // Start the last block timer
+        function startLastBlockTimer() {
+            lastBlockTimeRemaining = 20; // Reset timer to 20 seconds
+            timerDisplay.textContent = lastBlockTimeRemaining;
+            timerContainer.style.display = 'block'; // Show timer
+
+            // Clear any existing timer to prevent multiple timers running
+            if (lastBlockTimerId) clearTimeout(lastBlockTimerId);
+            if (lastBlockTimerIntervalId) clearInterval(lastBlockTimerIntervalId);
+
+            lastBlockTimerIntervalId = setInterval(() => {
+                lastBlockTimeRemaining--;
+                timerDisplay.textContent = lastBlockTimeRemaining;
+
+                if (lastBlockTimeRemaining <= 0) {
+                    clearInterval(lastBlockTimerIntervalId);
+                    gameOver = true;
+                    showMessage("시간 초과! 마지막 블록을 깨지 못했습니다.");
+                    startButton.style.display = 'none';
+                    resetButton.style.display = 'block';
+                    cancelAnimationFrame(animationFrameId);
+                    stopBackgroundMusic();
+                    timerContainer.style.display = 'none'; // Hide timer
+                }
+            }, 1000); // Update every second
+        }
+
+        // Stop and hide the last block timer
+        function stopLastBlockTimer() {
+            if (lastBlockTimerId) clearTimeout(lastBlockTimerId);
+            if (lastBlockTimerIntervalId) clearInterval(lastBlockTimerIntervalId);
+            lastBlockTimerId = null;
+            lastBlockTimerIntervalId = null;
+            timerContainer.style.display = 'none'; // Hide timer
+        }
+
+        // Collision detection for bricks
+        function collisionDetection() {
+            for (let c = 0; c < brickColumnCount; c++) {
+                for (let r = 0; r < brickRowCount; r++) {
+                    let b = bricks[c][r];
+                    if (b.status === 1) {
+                        if (x > b.x && x < b.x + brickWidth && y > b.y && y < b.y + brickHeight) {
+                            dy = -dy; // Reverse ball direction
+                            b.status = 0; // Deactivate brick
+                            score++;
+                            scoreDisplay.textContent = score;
+
+                            let activeBricksCount = getActiveBricksCount();
+
+                            if (activeBricksCount === 1 && lastBlockTimerId === null) {
+                                // If only one block remains and timer is not yet started, start it
+                                startLastBlockTimer();
+                            } else if (activeBricksCount === 0) { // Check if all active bricks are broken
+                                gameWon = true;
+                                gameOver = true; // Set game over to true to stop the loop
+                                showMessage("축하합니다! 모든 블록을 깼습니다!");
+                                startButton.style.display = 'none';
+                                resetButton.style.display = 'block';
+                                cancelAnimationFrame(animationFrameId);
+                                stopBackgroundMusic(); // Stop music on win
+                                stopLastBlockTimer(); // Stop and hide timer
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Show custom message box
+        function showMessage(message, callback) {
+            modalMessage.textContent = message;
+            messageModal.classList.add('show');
+            modalButton.onclick = () => {
+                modalMessage.classList.remove('show');
+                if (callback) {
+                    callback();
+                }
+            };
+        }
+
+        // Main drawing function
+        function draw() {
+            if (gameOver) return; // Stop drawing if game is over
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas
+
+            drawBricks();
+            drawBall();
+            drawPaddle();
+            collisionDetection();
+
+            // Ball movement
+            x += dx;
+            y += dy;
+
+            // Wall collision detection
+            if (x + dx > canvas.width - ballRadius || x + dx < ballRadius) {
+                dx = -dx;
+            }
+            if (y + dy < ballRadius) {
+                dy = -dy;
+            } else if (y + dy > canvas.height - ballRadius - paddleHeight) {
+                // Ball hits bottom (paddle area)
+                if (x > paddleX && x < paddleX + paddleWidth) {
+                    // Ball hits paddle
+                    dy = -dy;
+                    // Adjust ball speed based on where it hits the paddle
+                    let hitPoint = x - (paddleX + paddleWidth / 2);
+                    dx = hitPoint * 0.1; // Adjust sensitivity as needed
+                } else {
+                    // Ball hits bottom wall (missed paddle)
+                    lives--;
+                    livesDisplay.textContent = lives;
+                    if (lives === 0) {
+                        gameOver = true;
+                        showMessage("게임 오버! 다시 시작하시겠습니까?");
+                        startButton.style.display = 'none';
+                        resetButton.style.display = 'block';
+                        cancelAnimationFrame(animationFrameId);
+                        stopBackgroundMusic(); // Stop music on game over
+                        stopLastBlockTimer(); // Stop and hide timer
+                    } else {
+                        // Reset ball and paddle position for next life
+                        x = canvas.width / 2;
+                        y = canvas.height - 30;
+                        dx = 2;
+                        dy = -2;
+                        paddleX = (canvas.width - paddleWidth) / 2;
+                    }
+                }
+            }
+
+            // Paddle movement (keyboard) - still here but mouse takes precedence
+            if (rightPressed && paddleX < canvas.width - paddleWidth) {
+                paddleX += 7;
+            } else if (leftPressed && paddleX > 0) {
+                paddleX -= 7;
+            }
+
+            animationFrameId = requestAnimationFrame(draw);
+        }
+
+        // Keyboard event handlers
+        document.addEventListener("keydown", keyDownHandler, false);
+        document.addEventListener("keyup", keyUpHandler, false);
+
+        function keyDownHandler(e) {
+            if (e.key === "Right" || e.key === "ArrowRight") {
+                rightPressed = true;
+            } else if (e.key === "Left" || e.key === "ArrowLeft") {
+                leftPressed = true;
+            }
+        }
+
+        function keyUpHandler(e) {
+            if (e.key === "Right" || e.key === "ArrowRight") {
+                leftPressed = false;
+            } else if (e.key === "Left" || e.key === "ArrowLeft") {
+                rightPressed = false;
+            }
+        }
+
+        // Mouse event handler for paddle control
+        canvas.addEventListener('mousemove', mouseMoveHandler, false);
+
+        function mouseMoveHandler(e) {
+            // Calculate the relative X position of the mouse click within the canvas
+            // e.clientX is the mouse X coordinate relative to the viewport
+            // canvas.offsetLeft is the X position of the canvas relative to the viewport
+            let relativeX = e.clientX - canvas.offsetLeft;
+
+            // Update paddleX based on mouse position
+            // Center the paddle around the mouse cursor
+            if (relativeX > 0 && relativeX < canvas.width) {
+                paddleX = relativeX - paddleWidth / 2;
+                // Ensure paddle stays within canvas bounds
+                if (paddleX < 0) {
+                    paddleX = 0;
+                } else if (paddleX + paddleWidth > canvas.width) {
+                    paddleX = canvas.width - paddleWidth;
+                }
+            }
+        }
+
+        // Touch event handlers for paddle control
+        let touchStartX = 0;
+        let paddleMoveSpeed = 0.5; // Adjust sensitivity for touch
+
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // Prevent scrolling and other default behaviors
+            touchStartX = e.touches[0].clientX;
+        }, false);
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault(); // Prevent scrolling
+            if (e.touches.length > 0) {
+                let touchCurrentX = e.touches[0].clientX;
+                let deltaX = touchCurrentX - touchStartX;
+
+                // Adjust paddleX based on touch movement
+                paddleX += deltaX * paddleMoveSpeed;
+
+                // Keep paddle within canvas bounds
+                if (paddleX < 0) {
+                    paddleX = 0;
+                } else if (paddleX + paddleWidth > canvas.width) {
+                    paddleX = canvas.width - paddleWidth;
+                }
+                touchStartX = touchCurrentX; // Update start for continuous movement
+            }
+        }, false);
+
+        // Handle window resize
+        function resizeCanvas() {
+            const container = canvas.closest('.game-container');
+            if (container) {
+                const containerWidth = container.clientWidth - (2 * 16); // Account for padding (1rem = 16px)
+                canvas.width = Math.min(containerWidth, 600); // Max width of 600px
+                canvas.height = canvas.width * (320 / 480); // Maintain aspect ratio
+                // Re-center paddle and ball after resize
+                paddleX = (canvas.width - paddleWidth) / 2;
+                x = canvas.width / 2;
+                y = canvas.height - 30;
+            }
+        }
+
+        // Event listeners for buttons
+        startButton.addEventListener("click", startGame);
+        resetButton.addEventListener("click", resetGame);
+
+        function startGame() {
+            if (!gameStarted) {
+                gameStarted = true;
+                gameOver = false;
+                gameWon = false;
+                score = 0;
+                lives = 3;
+                scoreDisplay.textContent = score;
+                livesDisplay.textContent = lives;
+                stopLastBlockTimer(); // Ensure timer is stopped on start
+                initBricks();
+                // Reset ball and paddle position
+                x = canvas.width / 2;
+                y = canvas.height - 30;
+                dx = 2;
+                dy = -2;
+                paddleX = (canvas.width - paddleWidth) / 2;
+
+                startButton.style.display = 'none';
+                resetButton.style.display = 'block';
+                startBackgroundMusic(); // Start background music
+                draw(); // Start the game loop
+            }
+        }
+
+        function resetGame() {
+            cancelAnimationFrame(animationFrameId); // Stop any ongoing animation
+            stopBackgroundMusic(); // Stop background music
+            stopLastBlockTimer(); // Stop and hide timer on reset
+            gameStarted = false;
+            gameOver = false;
+            gameWon = false;
+            score = 0;
+            lives = 3;
+            scoreDisplay.textContent = score;
+            livesDisplay.textContent = lives;
+            initBricks();
+            // Reset ball and paddle position
+            x = canvas.width / 2;
+            y = canvas.height - 30;
+            dx = 2;
+            dy = -2;
+            paddleX = (canvas.width - paddleWidth) / 2;
+
+            startButton.style.display = 'block'; // Show start button again
+            resetButton.style.display = 'none'; // Hide reset button
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas
+            drawBricks(); // Draw bricks in their initial state
+            drawBall();
+            drawPaddle();
+        }
+
+        // Initial setup on window load
+        window.onload = function() {
+            resizeCanvas(); // Set initial canvas size
+            initBricks(); // Initialize bricks
+            drawBricks(); // Draw bricks for initial view
+            drawBall(); // Draw ball for initial view
+            drawPaddle(); // Draw paddle for initial view
+            initAudio(); // Initialize Tone.js audio components
+        };
+
+        // Add resize listener
+        window.addEventListener('resize', resizeCanvas);
+
+    </script>
+</body>
+</html>
