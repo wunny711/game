@@ -8,7 +8,7 @@
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #1a202c; /* Dark background */
+            background-color: #87CEEB; /* Sky blue background */
             display: flex;
             justify-content: center;
             align-items: center;
@@ -17,7 +17,7 @@
             overflow: hidden; /* Prevent scrolling */
         }
         canvas {
-            background-color: #2d3748; /* Slightly lighter dark background for canvas */
+            background-color: #ADD8E6; /* Slightly darker sky blue for canvas */
             display: block;
             border-radius: 1rem; /* Rounded corners */
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
@@ -28,7 +28,7 @@
             flex-direction: column;
             align-items: center;
             padding: 1rem;
-            background-color: #2d3748;
+            background-color: #ADD8E6; /* Match canvas background */
             border-radius: 1.5rem;
             box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
             max-width: 90vw; /* Responsive width */
@@ -39,7 +39,7 @@
             justify-content: space-between;
             width: 100%;
             margin-bottom: 1rem;
-            color: #e2e8f0; /* Light text color */
+            color: #1a202c; /* Dark text color for contrast */
             font-size: 1.125rem; /* lg */
             font-weight: bold;
         }
@@ -121,7 +121,7 @@
         }
         /* Timer display */
         #timer {
-            color: #e2e8f0;
+            color: #1a202c; /* Dark text for contrast */
             font-size: 1.125rem;
             font-weight: bold;
             margin-left: 1rem;
@@ -168,7 +168,7 @@
         let animationFrameId;
 
         // Ball properties
-        let ballRadius = 10;
+        let ballRadius = 20; // Ball size doubled
         let x = canvas.width / 2;
         let y = canvas.height - 30;
         let dx = 2; // Ball speed in x direction
